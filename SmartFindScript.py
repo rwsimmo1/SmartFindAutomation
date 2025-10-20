@@ -1,23 +1,44 @@
 
 # First, you need to install the required libraries:
 # pip install playwright python-dotenv
+
 import time
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
 # Define constants for the website and user credentials
 WEBSITE_URL = "https://loudouncountyva.eschoolsolutions.com/"
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
+# Prefer project-specific env vars to avoid colliding with OS-level USERNAME on Windows
+USERNAME = os.getenv("SMARTFIND_USERNAME", os.getenv("USERNAME"))
+PASSWORD = os.getenv("SMARTFIND_PASSWORD", os.getenv("PASSWORD"))
+
+# Warn if we're falling back to the system USERNAME (common on Windows)
+if "SMARTFIND_USERNAME" not in os.environ:
+    logger.warning("Environment variable SMARTFIND_USERNAME not set; falling back to USERNAME from environment."
+                   " On Windows this is usually the OS account name (e.g. 'Rob')."
+                   " To avoid this, set SMARTFIND_USERNAME in your .env file.")
+
+# Log a masked username for diagnostics (don't log full secrets)
+if USERNAME:
+    masked = USERNAME if len(USERNAME) <= 3 else USERNAME[:3] + "***"
+    logger.info(f"Using username: {masked}")
 
 # Define selectors for Playwright (as strings)
 USERNAME_SELECTOR = "#userId"
 PASSWORD_SELECTOR = "#userPin"
 LOGIN_BUTTON_SELECTOR = "#submitBtn"
 TEXT_TO_READ_SELECTOR = "#desktop-header.pds-page-head"
-# MESSAGE_OVERLAY_SELECTOR = "div.pds-overlay"
 MESSAGE_OVERLAY_SELECTOR = ".pds-message-content span"
 AVAILABLE_JOBS_TAB_SELECTOR = "#available-tab-link"
 ACTIVE_JOBS_TAB_SELECTOR = "#active-tab-link"
@@ -186,30 +207,24 @@ def process_row(row):
     
 def active_jobs_tab(page):
     """
-     Clicks the Active Jobs tab.
-     
-     Args:
-         page: Playwright page object.
-
-     Returns: None
-     """
-    print("Clicking the Active jobs tab...")
+    Clicks the Active Jobs tab.
+    Args:
+        page: Playwright page object.
+    Returns: None
+    """
+    logger.info("Clicking the Active jobs tab...")
     page.locator(ACTIVE_JOBS_TAB_SELECTOR).click()
 
 def verify_job_active(page, job, table_id):
     """
-     Verifies that the specified job is now active.
-     
-     Args:
-         top_job: The job (list of cell texts) to verify as active.
-
-     Returns: None
-     """
-    print(f"Verifying that the job '{job}' is now active...")
+    Verifies that the specified job is now active.
+    Args:
+        job: The job (list of cell texts) to verify as active.
+    Returns: None
+    """
+    logger.info(f"Verifying that the job '{job}' is now active...")
     # Here you would add code to verify that the job is listed in the active jobs section.
     # This could involve checking for the presence of the job in a table or list.
-    
-    # Select the active jobs table
     active_jobs_table_selector = f"#{table_id}"
     page.wait_for_selector(active_jobs_table_selector + " tbody tr")
     active_jobs_table = page.locator(active_jobs_table_selector)
@@ -222,6 +237,6 @@ def verify_job_active(page, job, table_id):
             found = True
             break
     if found:
-        print(f"Job '{job}' is now active.")
+        logger.info(f"Job '{job}' is now active.")
     else:
-        print(f"Job '{job}' is NOT active.")
+        logger.warning(f"Job '{job}' was not found in the active jobs table.")

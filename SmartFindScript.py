@@ -1,11 +1,12 @@
 
 # First, you need to install the required libraries:
-# pip install playwright python-dotenv
+# pip install playwright python-dotenv keyring
 
 import time
 import os
 import logging
 from dotenv import load_dotenv
+import keyring
 
 load_dotenv()
 
@@ -18,16 +19,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define constants for the website and user credentials
-WEBSITE_URL = "https://loudouncountyva.eschoolsolutions.com/"
+WEBSITE_URL = os.getenv("SMARTFIND_WEBSITE_URL")
 # Prefer project-specific env vars to avoid colliding with OS-level USERNAME on Windows
-USERNAME = os.getenv("SMARTFIND_USERNAME", os.getenv("USERNAME"))
-PASSWORD = os.getenv("SMARTFIND_PASSWORD", os.getenv("PASSWORD"))
+USERNAME = os.getenv("SMARTFIND_USERNAME")  # or None
+# retrieve password from Windows Credential Manager:
+PASSWORD = keyring.get_password("SmartFind", USERNAME)
 
-# Warn if we're falling back to the system USERNAME (common on Windows)
-if "SMARTFIND_USERNAME" not in os.environ:
-    logger.warning("Environment variable SMARTFIND_USERNAME not set; falling back to USERNAME from environment."
-                   " On Windows this is usually the OS account name (e.g. 'Rob')."
-                   " To avoid this, set SMARTFIND_USERNAME in your .env file.")
+if PASSWORD is None:
+    raise RuntimeError("Password not found in keyring for service 'SmartFind' and username: " + str(USERNAME))
 
 # Log a masked username for diagnostics (don't log full secrets)
 if USERNAME:

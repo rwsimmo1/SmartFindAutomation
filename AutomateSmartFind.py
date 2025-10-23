@@ -60,43 +60,50 @@ def automate_website():
             copied_text = page.locator(DATE_RANGE_SELECTOR).inner_text()
             logger.info(f"Date Range': '{copied_text}'")
 
-            # --- Interact with a table ---
-            logger.info("Interacting with the jobs table...")
-            rows = any
-            jobs_table = page.locator(JOBS_TABLE_SELECTOR)
-            if jobs_table:
-                page.wait_for_selector(JOBS_TABLE_SELECTOR + " tbody tr")
-                rows = jobs_table.locator("tbody tr").all()
-            if rows:
-                logger.info(f"Found {len(rows)} rows in the jobs table.")
-                possible_jobs = []
-                for index, row in enumerate(rows):
-                    cell_texts = process_row(row)
-                    if cell_texts:  # Only add non-empty rows
-                        possible_jobs.append(cell_texts)
-                    else:
-                        # Job was rejected based on criteria
-                        # Let's decline the job by clicking on the decline button
-                        # decline_job(driver, row, index)
-                        logger.warning(f"Rejected job at row {index + 1}.")
-                logger.info(f"Possible jobs collected: {possible_jobs}")
-                if possible_jobs:
-                    # Rank the possible jobs and select the top one
-                    top_job = rank_jobs(possible_jobs)
-                    if top_job:
-                        logger.info(f"Top ranked job: {top_job}")
-                        # Find the row corresponding to the top job and accept it
-                        for index, row in enumerate(rows):
-                            cell_texts = process_row(row)
-                            if cell_texts == top_job:
-                                accept_job(page, row, index)
-                                active_jobs_tab(page)
-                                verify_job_active(page, top_job, ACTIVE_TABLE_ID)
-                                break
-                    else:
-                        logger.info("No jobs to rank or accept.")
-            else:
-                logger.info("No acceptable jobs found in the jobs table.")
+            # --- Test for info message overlay and that it is visable ---
+            info_div = page.wait_for_selector("div.pds-message-info", timeout=3000)
+            if info_div and info_div.is_visible():
+                # Display the info message and exit
+                info_text = info_div.inner_text()
+                logger.info(f"Info message: {info_text}")
+            else: 
+                # --- Interact with a table ---
+                logger.info("Interacting with the jobs table...")
+                rows = any
+                jobs_table = page.locator(JOBS_TABLE_SELECTOR)
+                if jobs_table:
+                    page.wait_for_selector(JOBS_TABLE_SELECTOR + " tbody tr")
+                    rows = jobs_table.locator("tbody tr").all()
+                if rows:
+                    logger.info(f"Found {len(rows)} rows in the jobs table.")
+                    possible_jobs = []
+                    for index, row in enumerate(rows):
+                        cell_texts = process_row(row)
+                        if cell_texts:  # Only add non-empty rows
+                            possible_jobs.append(cell_texts)
+                        else:
+                            # Job was rejected based on criteria
+                            # Let's decline the job by clicking on the decline button
+                            # decline_job(driver, row, index)
+                            logger.warning(f"Rejected job at row {index + 1}.")
+                    logger.info(f"Possible jobs collected: {possible_jobs}")
+                    if possible_jobs:
+                        # Rank the possible jobs and select the top one
+                        top_job = rank_jobs(possible_jobs)
+                        if top_job:
+                            logger.info(f"Top ranked job: {top_job}")
+                            # Find the row corresponding to the top job and accept it
+                            for index, row in enumerate(rows):
+                                cell_texts = process_row(row)
+                                if cell_texts == top_job:
+                                    # accept_job(page, row, index)
+                                    active_jobs_tab(page)
+                                    verify_job_active(page, top_job, ACTIVE_TABLE_ID)
+                                    break
+                        else:
+                            logger.info("No jobs to rank or accept.")
+                else:
+                    logger.info("No acceptable jobs found in the jobs table.")
 
             logger.info("Closing the browser.")
             context.close()

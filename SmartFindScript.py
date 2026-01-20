@@ -1,12 +1,16 @@
-
 # First, you need to install the required libraries:
 # pip install playwright python-dotenv keyring
 
 import time
 import os
+import sys
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import keyring
+from datetime import datetime
 
 load_dotenv()
 
@@ -49,6 +53,31 @@ TEXT_TO_COPY_SELECTOR = ".article-content p:first-of-type"
 ACTIVE_TABLE_ID = "parent-table-desktop-active"
 JOB_CLASSIFICATION_INDEX_DEFAULT = 3
 JOB_LOCATION_INDEX_DEFAULT = 4
+DATE_FILTER_BUTTON_SELECTOR = "#date-header > pds-icon"
+# DATE_RANGE_BUTTON_SELECTOR = "#date-type-range-option-0"
+DATE_RANGE_BUTTON_SELECTOR = "text=Date Range"
+START_DATE_INPUT_SELECTOR = "#start-date-filter-input"
+END_DATE_INPUT_SELECTOR = "#end-date-filter-input"
+APPLY_FILTER_BUTTON_SELECTOR = "#apply-filter"
+
+def read_dates_from_command_line():
+    """
+    Reads start_date and end_date from the command line in MM/DD/YYYY format.
+    Returns:
+        (start_date, end_date): Tuple of datetime.date objects, (None, None) if no dates provided.
+    Raises:
+        ValueError: If the dates are provided but in wrong format.
+    """
+    if len(sys.argv) < 3:
+        return None, None
+    start_str = sys.argv[1]
+    end_str = sys.argv[2]
+    try:
+        start_date = datetime.strptime(start_str, "%m/%d/%Y").date()
+        end_date = datetime.strptime(end_str, "%m/%d/%Y").date()
+    except ValueError:
+        raise ValueError("Dates must be in MM/DD/YYYY format.")
+    return start_date, end_date
 
 def rank_jobs(possible_jobs):
     """
@@ -146,7 +175,7 @@ def decline_job(page, row, index):
     confirm_decline_button.click()
     print(f"Declined job at row {index + 1}.")
 
-def accept_job(page, row, index):
+def will_accept_job(page, row, index):
     """
     Accepts a job by clicking the accept button and confirming the action.
 
@@ -163,7 +192,7 @@ def accept_job(page, row, index):
     header_text = page.locator("header h4").inner_text()
     print(f"Popup Header Text: {header_text}")
     confirm_accept_button = page.locator("#confirm-dialog")
-    confirm_accept_button.click()
+    # confirm_accept_button.click()
     page.wait_for_selector(MESSAGE_OVERLAY_SELECTOR)
     message_text = page.locator(MESSAGE_OVERLAY_SELECTOR).inner_text()
     print(f"Message Overlay Text: {message_text}")
@@ -191,8 +220,11 @@ def process_row(row):
     if len(cell_texts) < 5:
         job_classification_index = JOB_CLASSIFICATION_INDEX_DEFAULT-1
         job_location_index = JOB_LOCATION_INDEX_DEFAULT-1
-    if len(cell_texts) > job_classification_index and "SPED" in cell_texts[job_classification_index]:
+    if len(cell_texts) > job_classification_index and ("SPED" or "ADAPTED PE") in cell_texts[job_classification_index]:
         print("SPED Job.")
+        return_row = False
+    if len(cell_texts) > job_classification_index and "MS PHYS ED" in cell_texts[job_classification_index]:
+        print("MS PHYS ED Job.")
         return_row = False
     if len(cell_texts) > job_classification_index and "HS EL" in cell_texts[job_classification_index]:
         print("HS EL Job.")
@@ -240,3 +272,99 @@ def verify_job_active(page, job, table_id):
         logger.info(f"Job '{job}' is now active.")
     else:
         logger.warning(f"Job '{job}' was not found in the active jobs table.")
+
+def send_email(to_address, subject, body, from_address=None, password=None, smtp_server="smtp.gmail.com", smtp_port=587):
+    """
+    Send an email to the specified address(es).
+    
+    Parameters:
+    -----------
+    to_address : str or list of str
+        Recipient email address(es). If str, can be comma-separated.
+    subject : str
+        Email subject line
+    body : str
+        Email body content
+    from_address : str, optional
+        Sender's email address (defaults to environment variable EMAIL_ADDRESS)
+    password : str, optional
+        Sender's email password or app password (defaults to environment variable EMAIL_PASSWORD)
+    smtp_server : str, optional
+        SMTP server address (default: Gmail)
+    smtp_port : int, optional
+        SMTP server port (default: 587 for TLS)
+    
+    Returns:
+    --------
+    bool
+        True if email sent successfully, False otherwise
+    
+    Example:
+    --------
+    # Set environment variables first:
+    # export EMAIL_ADDRESS="your_email@gmail.com"
+    # export EMAIL_PASSWORD="your_app_password"
+    
+    send_email(
+        to_address="recipient@example.com",
+        subject="Test Email",
+        body="This is a test email."
+    )
+    
+    # Multiple recipients:
+    send_email(
+        to_address="user1@example.com, user2@example.com",
+        subject="Test Email",
+        body="This is a test email."
+    )
+    """
+    
+    # Get credentials from parameters or environment variables
+    from_address = from_address or os.getenv('EMAIL_ADDRESS')
+    password = password or os.getenv('EMAIL_PASSWORD')
+    
+    if not from_address or not password:
+        raise ValueError("Email credentials not provided. Set EMAIL_ADDRESS and EMAIL_PASSWORD environment variables or pass them as parameters.")
+    
+    # Parse to_address
+    if isinstance(to_address, str):
+        to_list = [addr.strip() for addr in to_address.split(',') if addr.strip()]
+    else:
+        to_list = list(to_address)
+    
+    if not to_list:
+        raise ValueError("No valid recipient addresses provided.")
+    
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = from_address
+        msg['To'] = ", ".join(to_list)
+        msg['Subject'] = subject
+        
+        # Attach body to email
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Create SMTP session
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()  # Enable TLS encryption
+            server.login(from_address, password)
+            
+            # Send email
+            text = msg.as_string()
+            server.sendmail(from_address, to_list, text)
+        
+        print(f"Email sent successfully to {', '.join(to_list)}")
+        return True
+        
+    except smtplib.SMTPAuthenticationError:
+        print("Error: Authentication failed. Check your email and password.")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"SMTP error occurred: {e}")
+        return False
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
+

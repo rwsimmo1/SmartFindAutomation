@@ -5,14 +5,17 @@ import logging
 
 # Import everything needed from your main script
 from SmartFindScript import (
-    WEBSITE_URL, USERNAME, PASSWORD,
+    INFO_MESSAGE_OVERLAY_SELECTOR, WEBSITE_URL, USERNAME, PASSWORD,
     USERNAME_SELECTOR, PASSWORD_SELECTOR, LOGIN_BUTTON_SELECTOR,
     TEXT_TO_READ_SELECTOR, AVAILABLE_JOBS_TAB_SELECTOR, ACTIVE_JOBS_TAB_SELECTOR,
     DATE_RANGE_SELECTOR, JOBS_TABLE_SELECTOR, BUTTON_TO_CLICK_SELECTOR,
     TEXT_TO_COPY_SELECTOR, JOB_CLASSIFICATION_INDEX_DEFAULT, JOB_LOCATION_INDEX_DEFAULT,
-    ACTIVE_TABLE_ID,
-    process_row, rank_jobs, accept_job, decline_job, active_jobs_tab, verify_job_active
+    ACTIVE_TABLE_ID, DATE_FILTER_BUTTON_SELECTOR, DATE_RANGE_BUTTON_SELECTOR, START_DATE_INPUT_SELECTOR,
+    END_DATE_INPUT_SELECTOR, APPLY_FILTER_BUTTON_SELECTOR,
+    process_row, rank_jobs, decline_job, active_jobs_tab, verify_job_active,
+    read_dates_from_command_line, send_email
 )
+from send_with_google_app_password import find_app_password
 
 def automate_website():
     """
@@ -27,7 +30,7 @@ def automate_website():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context()
             page = context.new_page()
 
@@ -51,7 +54,25 @@ def automate_website():
             welcome_text = page.locator(TEXT_TO_READ_SELECTOR).inner_text()
             logger.info(f"Read text: '{welcome_text}'")
 
-            # --- Click a button to navigate ---
+            # --- Get optional dates from command line ---
+            # read_dates_from_command_line() returns (start_date, end_date) or (None, None)
+            start_date, end_date = read_dates_from_command_line()
+            logger.info(f"User supplied date range: {start_date} to {end_date}")
+            if start_date is not None and end_date is not None:
+                logger.info(f"Using date range from {start_date} to {end_date}")
+                # Click to open date range selector and set dates
+                page.locator(DATE_FILTER_BUTTON_SELECTOR).click()
+                page.locator(DATE_RANGE_BUTTON_SELECTOR).click()
+                # Convert start_date and end_date to MM/DD/YYYY string format
+                start_date_str = start_date.strftime("%m/%d/%Y")
+                end_date_str = end_date.strftime("%m/%d/%Y")
+                page.locator(START_DATE_INPUT_SELECTOR).fill(start_date_str)
+                page.locator(END_DATE_INPUT_SELECTOR).fill(end_date_str)
+                page.locator(APPLY_FILTER_BUTTON_SELECTOR).click()
+            else:
+                logger.info("No date range supplied on the command line; continuing without date filters.")
+
+            # --- Click the Available Jobs tab ---
             logger.info("Clicking the Available jobs tab...")
             page.locator(AVAILABLE_JOBS_TAB_SELECTOR).click()
 
@@ -61,7 +82,11 @@ def automate_website():
             logger.info(f"Date Range': '{copied_text}'")
 
             # --- Test for info message overlay and that it is visable ---
-            info_div = page.wait_for_selector("div.pds-message-info", timeout=3000)
+            try:
+                info_div = page.wait_for_selector(INFO_MESSAGE_OVERLAY_SELECTOR)
+            except Exception as e:
+                logger.info(f"Info message overlay not found or timed out.")
+                info_div = None
             if info_div and info_div.is_visible():
                 # Display the info message and exit
                 info_text = info_div.inner_text()
@@ -69,11 +94,15 @@ def automate_website():
             else: 
                 # --- Interact with a table ---
                 logger.info("Interacting with the jobs table...")
-                rows = any
+                rows = []
                 jobs_table = page.locator(JOBS_TABLE_SELECTOR)
                 if jobs_table:
-                    page.wait_for_selector(JOBS_TABLE_SELECTOR + " tbody tr")
-                    rows = jobs_table.locator("tbody tr").all()
+                    try:
+                        page.wait_for_selector(JOBS_TABLE_SELECTOR + " tbody tr")
+                        rows = jobs_table.locator("tbody tr").all()
+                    except Exception as e:
+                        logger.info(f"Error waiting for table rows: {e}")
+                        rows = []
                 if rows:
                     logger.info(f"Found {len(rows)} rows in the jobs table.")
                     possible_jobs = []
@@ -96,9 +125,23 @@ def automate_website():
                             for index, row in enumerate(rows):
                                 cell_texts = process_row(row)
                                 if cell_texts == top_job:
-                                    # accept_job(page, row, index)
-                                    active_jobs_tab(page)
-                                    verify_job_active(page, top_job, ACTIVE_TABLE_ID)
+                                    logger.info(f"Notify job at row {index + 1}: {top_job}")
+                                    google_app_service = "SmartFindAutomationGoogleApp"
+                                    service_username = "SmartFindAutomation"
+                                    password = find_app_password(google_app_service, service_username)
+                                    if not password:
+                                        logger.error("Google App password for service_username '%s' not found in Credential Manager.", 
+                                                service_username)
+                                        logger.error("Please add it to Windows Credential Manager (use Windows Credential Manager UI or keyring.set_password) and try again.")
+                                        continue  # Skip to next job or exit loop
+                                    send_email(
+                                        to_address="rwsimmo@gmail.com, simm.sean16@gmail.com",
+                                        subject="SmartFindAutomation: Job Available",
+                                        body=f"A new job has is available:\n\n{top_job}",
+                                        from_address="rwsimmo@gmail.com",
+                                        password=password)
+                                    # active_jobs_tab(page)
+                                    # verify_job_active(page, top_job, ACTIVE_TABLE_ID)
                                     break
                         else:
                             logger.info("No jobs to rank or accept.")

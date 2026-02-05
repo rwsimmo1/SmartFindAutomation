@@ -90,10 +90,15 @@ def rank_jobs(possible_jobs):
         The top ranked job (list of cell texts) or None if no jobs are available.
     """
     # Define ranking groups
-    high_locations = {"CHAMPE", "FREEDOM", "LTGHTRIDGE"}
+    high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
+                      "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH", "BRIAR WOODS HIGH"}
     mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
-    high_classifications = {"HISTORY"}
+    high_classifications = {"HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
+                            "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
+                            "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
+                            "HS TECHNOLOGY ED"}
     mid_classifications = {"MUSIC", "DRAMA", "LIBRARY", "LIBRARIAN", "GERMAN"}
+    high_time_range = "09:00 AM  04:30 PM"
 
     ranked_jobs = []
 
@@ -175,7 +180,7 @@ def decline_job(page, row, index):
     confirm_decline_button.click()
     print(f"Declined job at row {index + 1}.")
 
-def will_accept_job(page, row, index):
+def accept_job(page, row, index):
     """
     Accepts a job by clicking the accept button and confirming the action.
 
@@ -192,7 +197,7 @@ def will_accept_job(page, row, index):
     header_text = page.locator("header h4").inner_text()
     print(f"Popup Header Text: {header_text}")
     confirm_accept_button = page.locator("#confirm-dialog")
-    # confirm_accept_button.click()
+    confirm_accept_button.click()
     page.wait_for_selector(MESSAGE_OVERLAY_SELECTOR)
     message_text = page.locator(MESSAGE_OVERLAY_SELECTOR).inner_text()
     print(f"Message Overlay Text: {message_text}")

@@ -92,7 +92,7 @@ def rank_jobs(possible_jobs):
     high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
                       "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH"}
     mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
-    high_classifications = {"HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
+    high_classifications = {"HS ART", "HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
                             "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
                             "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
                             "HS TECHNOLOGY ED"}

@@ -59,6 +59,17 @@ START_DATE_INPUT_SELECTOR = "#start-date-filter-input"
 END_DATE_INPUT_SELECTOR = "#end-date-filter-input"
 APPLY_FILTER_BUTTON_SELECTOR = "#apply-filter"
 
+# Define ranking groups
+high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
+                    "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH"}
+mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
+high_classifications = {"HS ART", "HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
+                        "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
+                        "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
+                        "HS TECHNOLOGY ED", "HS WORLD HISTORY AND GLOBAL STUDIES"}
+mid_classifications = {"MUSIC", "DRAMA", "LIBRARY", "LIBRARIAN", "GERMAN"}
+high_time_range = "09:00 AM  04:30 PM"
+
 def read_dates_from_command_line():
     """
     Reads start_date and end_date from the command line in MM/DD/YYYY format.
@@ -88,16 +99,6 @@ def rank_jobs(possible_jobs):
     Returns:
         The top ranked job (list of cell texts) or None if no jobs are available.
     """
-    # Define ranking groups
-    high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
-                      "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH"}
-    mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
-    high_classifications = {"HS ART", "HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
-                            "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
-                            "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
-                            "HS TECHNOLOGY ED", "HS WORLD HISTORY AND GLOBAL STUDIES"}
-    mid_classifications = {"MUSIC", "DRAMA", "LIBRARY", "LIBRARIAN", "GERMAN"}
-    high_time_range = "09:00 AM  04:30 PM"
 
     ranked_jobs = []
 
@@ -440,15 +441,6 @@ def should_accept_job(job):
     """
     if len(job) < 5:
         return False
-    
-    # Define high criteria (same as in rank_jobs)
-    high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
-                      "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH"}
-    high_classifications = {"HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
-                            "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
-                            "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
-                            "HS TECHNOLOGY ED"}
-    high_time_range = "09:00 AM  04:30 PM"
     
     location = job[4]
     classification = job[3]

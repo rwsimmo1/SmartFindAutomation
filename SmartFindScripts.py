@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import keyring
-from datetime import datetime
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -61,14 +61,27 @@ APPLY_FILTER_BUTTON_SELECTOR = "#apply-filter"
 
 # Define ranking groups
 high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
-                    "PARK VIEW HIGH", "LOUDOUN COUNTY HIGH", "RIVERSIDE HIGH"}
+                    "PARK VIEW HIGH", "RIVERSIDE HIGH"}
 mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
 high_classifications = {"HS ART", "HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
                         "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
                         "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
                         "HS TECHNOLOGY ED", "HS WORLD HISTORY AND GLOBAL STUDIES"}
-mid_classifications = {"MUSIC", "DRAMA", "LIBRARY", "LIBRARIAN", "GERMAN"}
+mid_classifications = {"MS CHORAL MUSIC", "MS MATH", "MS LIBRARIAN", "MS LIBRARY ASSISTANT", "MS GERMAN",
+                       "MS ENGLISH", "MS WORLD HISTORY AND GLOBAL STUDIES"}
 high_time_range = "09:00 AM  04:30 PM"
+mid_time_range = "08:00 AM  03:30 PM"
+mid_date_range = 7 # number of days for the mid-level date range filter
+
+
+def parse_job_date(job_date_str):
+    """Parse a job date string from supported SmartFind formats."""
+    for date_format in ("%A %m/%d/%Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(job_date_str, date_format)
+        except ValueError:
+            continue
+    return None
 
 def read_dates_from_command_line():
     """
@@ -450,8 +463,21 @@ def should_accept_job(job):
     has_high_location = any(loc in location for loc in high_locations)
     has_high_classification = any(cls in classification for cls in high_classifications)
     has_high_time = high_time_range in time_range
-    
-    return has_high_location and has_high_classification and has_high_time
+    has_mid_location = any(loc in location for loc in mid_locations)
+    has_mid_classification = any(cls in classification for cls in mid_classifications)
+    has_mid_time = mid_time_range in time_range
+    # Compare date values (not full datetimes) so jobs dated "today" are included.
+    today = datetime.today().date()
+    mid_date_limit = today + timedelta(days=mid_date_range)
+    job_date_str = job[0] if len(job) > 0 else ""
+    job_date = parse_job_date(job_date_str)
+    job_date_value = job_date.date() if job_date is not None else None
+    is_within_mid_date_range = (
+        job_date_value is not None and today <= job_date_value <= mid_date_limit
+    )
+
+    return (has_high_location and has_high_classification and has_high_time) or \
+        (has_mid_location and has_mid_classification and has_mid_time and is_within_mid_date_range)
 
 # ============================================================================
 # Date Filter Management Functions

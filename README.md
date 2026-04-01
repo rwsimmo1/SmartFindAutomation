@@ -8,7 +8,7 @@ This repository contains a small Playwright-based automation that logs into Smar
 
 Main files
 - `AutomateSmartFind.py` — orchestration script (Playwright steps, program entrypoint)
-- `SmartFindScript.py` — helpers, selectors, credential retrieval, and page-interaction helpers
+- `SmartFindScripts.py` — helpers, selectors, credential retrieval, and page-interaction helpers
 
 ## Prerequisites
 

@@ -4,10 +4,10 @@ Unit tests for rank_jobs and should_accept_job functions.
 Run with: pytest test_rank_and_accept_jobs.py -v
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
-from SmartFindScripts import rank_jobs, should_accept_job
+from SmartFindScripts import has_minimum_time_duration, rank_jobs, should_accept_job
 
 
 def _smartfind_date(days_ahead: int = 0) -> str:
@@ -35,6 +35,12 @@ def _mid_job_date_at_upper_boundary() -> str:
 def _mid_job_date_in_past() -> str:
     """Return a date before today, which should fail middle-school date checks."""
     return _smartfind_date(days_ahead=-1)
+
+
+def _smartfind_date_from_base(base_date: date, days_ahead: int = 0) -> str:
+    """Return a SmartFind-style date string based on a fixed base date."""
+    target = base_date + timedelta(days=days_ahead)
+    return target.strftime("%A %m/%d/%Y")
 
 
 class TestRankJobs:
@@ -137,6 +143,8 @@ class TestRankJobs:
 
 class TestShouldAcceptJob:
     """Test cases for the should_accept_job function."""
+
+    FIXED_TODAY = date(2026, 4, 11)
     
     def test_job_meets_all_high_criteria(self):
         """Test that a job meeting all high criteria returns True."""
@@ -154,9 +162,9 @@ class TestShouldAcceptJob:
         assert should_accept_job(job) is False, "Job without high location should not be accepted"
     
     def test_job_with_high_criteria_but_wrong_time(self):
-        """Test that high location + classification but wrong time returns False."""
+        """Test that high location + classification but short duration returns False."""
         job = ['Monday 03/02/2026', '08:00 AM  03:00 PM', 'John Doe', 'HS HISTORY', 'JOHN CHAMPE HIGH']
-        assert should_accept_job(job) is False, "Job without correct time range should not be accepted"
+        assert should_accept_job(job) is False, "Job below minimum duration should not be accepted"
     
     def test_job_with_insufficient_columns(self):
         """Test that job with < 5 columns returns False."""
@@ -164,9 +172,9 @@ class TestShouldAcceptJob:
         assert should_accept_job(job) is False, "Job with < 5 columns should not be accepted"
     
     def test_job_with_partial_time_match(self):
-        """Test that time range must be exact."""
+        """Test that a time range below 7.5 hours is rejected."""
         job = ['Monday 03/02/2026', '09:00 AM  03:30 PM', 'John Doe', 'HS HISTORY', 'JOHN CHAMPE HIGH']
-        assert should_accept_job(job) is False, "Partial time match should not be accepted"
+        assert should_accept_job(job) is False, "Duration below 7.5 hours should not be accepted"
     
     def test_all_high_locations_accepted(self):
         """Test that all high locations work with should_accept_job."""
@@ -200,18 +208,19 @@ class TestShouldAcceptJob:
             'MS CHORAL MUSIC', 'MS MATH', 'MS LIBRARIAN', 'MS LIBRARY ASSISTANT', 'MS GERMAN',
                        'MS ENGLISH', 'MS WORLD HISTORY AND GLOBAL STUDIES'
         ]
-        mid_date = _mid_job_date_within_window()
+        mid_date = _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=1)
         
         for classification in mid_classifications:
             job = [mid_date, '08:00 AM  03:30 PM', 'John Doe', classification, 'WILLARD MIDDLE']
-            assert should_accept_job(job) is True, f"Job with '{classification}' should be accepted"
+            assert (
+                should_accept_job(job, current_date=self.FIXED_TODAY) is True
+            ), f"Job with '{classification}' should be accepted"
 
     
     def test_time_range_with_extra_spaces(self):
-        """Test that exact time format matters (extra spaces)."""
-        # The function checks for exact match "09:00 AM  04:30 PM" (2 spaces)
+        """Test that spacing differences do not matter when duration is valid."""
         job = ['Monday 03/02/2026', '09:00 AM 04:30 PM', 'John Doe', 'HS HISTORY', 'JOHN CHAMPE HIGH']  # 1 space
-        assert should_accept_job(job) is False, "Time range must match exactly"
+        assert should_accept_job(job) is True, "Valid 7.5-hour duration should be accepted regardless of spacing"
     
     def test_empty_time_range(self):
         """Test that empty or missing time range returns False."""
@@ -226,86 +235,161 @@ class TestShouldAcceptJob:
     def test_all_mid_locations_accepted(self):
         """Test that all high locations work with should_accept_job."""
         mid_locations = [
-            'WILLARD MIDDLE', 'GUM SPRING MIDDLE', 'LUNSFORD MIDDLE'
+            'WILLARD MIDDLE', 'GUM SPRING MIDDLE', 'J. MICHAEL LUNSFORD MIDDLE'
         ]
-        mid_date = _mid_job_date_within_window()
+        mid_date = _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=1)
         
         for location in mid_locations:
-            job = [mid_date, '08:00 AM  03:30 PM', 'John Doe', 'MS MATH', location]
-            assert should_accept_job(job) is True, f"Job at '{location}' should be accepted"
+            time_range = '08:20 AM  03:50 PM' if location == 'GUM SPRING MIDDLE' else '08:00 AM  03:30 PM'
+            job = [mid_date, time_range, 'John Doe', 'MS MATH', location]
+            assert (
+                should_accept_job(job, current_date=self.FIXED_TODAY) is True
+            ), f"Job at '{location}' should be accepted"
 
     def test_mid_job_outside_date_window_rejected(self):
         """Test that a middle-school job outside the 7-day window is rejected."""
         job = [
-            _mid_job_date_outside_window(),
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=8),
             '08:00 AM  03:30 PM',
             'John Doe',
             'MS MATH',
             'WILLARD MIDDLE',
         ]
-        assert should_accept_job(job) is False, (
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is False, (
             "Middle-school jobs beyond the 7-day window should be rejected"
         )
 
     def test_mid_job_today_is_accepted(self):
         """Test that middle-school jobs dated today are accepted."""
         job = [
-            _smartfind_date(days_ahead=0),
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=0),
             '08:00 AM  03:30 PM',
             'John Doe',
             'MS MATH',
             'WILLARD MIDDLE',
         ]
-        assert should_accept_job(job) is True, "Today should be inside the inclusive mid-date window"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is True, "Today should be inside the inclusive mid-date window"
 
     def test_mid_job_at_upper_boundary_is_accepted(self):
         """Test that middle-school jobs dated exactly 7 days ahead are accepted."""
         job = [
-            _mid_job_date_at_upper_boundary(),
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=7),
             '08:00 AM  03:30 PM',
             'John Doe',
             'MS MATH',
             'WILLARD MIDDLE',
         ]
-        assert should_accept_job(job) is True, "Upper boundary day should be included"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is True, "Upper boundary day should be included"
 
     def test_mid_job_in_past_is_rejected(self):
         """Test that middle-school jobs dated before today are rejected."""
         job = [
-            _mid_job_date_in_past(),
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=-1),
             '08:00 AM  03:30 PM',
             'John Doe',
             'MS MATH',
             'WILLARD MIDDLE',
         ]
-        assert should_accept_job(job) is False, "Past dates should be outside the mid-date window"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is False, "Past dates should be outside the mid-date window"
 
     def test_mid_job_with_mmddyyyy_date_format_is_accepted(self):
         """Test that middle-school jobs using MM/DD/YYYY format are accepted when in range."""
-        date_str = (datetime.today() + timedelta(days=1)).strftime("%m/%d/%Y")
+        date_str = (self.FIXED_TODAY + timedelta(days=1)).strftime("%m/%d/%Y")
         job = [date_str, '08:00 AM  03:30 PM', 'John Doe', 'MS MATH', 'WILLARD MIDDLE']
-        assert should_accept_job(job) is True, "MM/DD/YYYY format should be parsed correctly"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is True, "MM/DD/YYYY format should be parsed correctly"
 
     def test_mid_job_with_invalid_date_format_is_rejected(self):
         """Test that invalid date formats are rejected for middle-school jobs."""
         job = ['2026-04-03', '08:00 AM  03:30 PM', 'John Doe', 'MS MATH', 'WILLARD MIDDLE']
-        assert should_accept_job(job) is False, "Invalid date format should not be accepted"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is False, "Invalid date format should not be accepted"
 
     def test_mid_job_wrong_time_even_with_valid_date_is_rejected(self):
-        """Test that middle-school jobs fail when time does not match."""
+        """Test that middle-school jobs fail when duration is below threshold."""
         job = [
-            _mid_job_date_within_window(),
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=1),
             '08:00 AM  03:00 PM',
             'John Doe',
             'MS MATH',
             'WILLARD MIDDLE',
         ]
-        assert should_accept_job(job) is False, "Mid-tier jobs still require exact middle-school time"
+        assert should_accept_job(job, current_date=self.FIXED_TODAY) is False, "Mid-tier jobs still require at least 7.5 hours"
+
+    def test_mid_job_uses_default_today_when_current_date_omitted(self):
+        """Test backward-compatible behavior when current_date is not provided."""
+        job = [
+            _smartfind_date(days_ahead=1),
+            '08:00 AM  03:30 PM',
+            'John Doe',
+            'MS MATH',
+            'WILLARD MIDDLE',
+        ]
+        assert should_accept_job(job) is True, "Function should use today's date by default"
+
+    def test_current_date_parameter_controls_mid_window(self):
+        """Test that explicit current_date determines middle-school window checks."""
+        job = [
+            _smartfind_date_from_base(self.FIXED_TODAY, days_ahead=1),
+            '08:00 AM  03:30 PM',
+            'John Doe',
+            'MS MATH',
+            'WILLARD MIDDLE',
+        ]
+        far_future_today = self.FIXED_TODAY + timedelta(days=30)
+        assert should_accept_job(job, current_date=far_future_today) is False, (
+            "Passing current_date should shift the acceptance window"
+        )
+
+    def test_high_tier_still_accepted_with_explicit_current_date(self):
+        """Test that high-tier path is unaffected by explicit current_date."""
+        job = ['Monday 01/01/1990', '09:00 AM  04:30 PM', 'John Doe', 'HS HISTORY', 'JOHN CHAMPE HIGH']
+        far_future_today = self.FIXED_TODAY + timedelta(days=365)
+        assert should_accept_job(job, current_date=far_future_today) is True
 
     def test_high_tier_job_acceptance_does_not_depend_on_date(self):
         """Test that high-tier acceptance ignores date window constraints."""
         job = ['Monday 01/01/1990', '09:00 AM  04:30 PM', 'John Doe', 'HS HISTORY', 'JOHN CHAMPE HIGH']
         assert should_accept_job(job) is True, "High-tier path should not require mid-date window"
+
+
+class TestHasMinimumTimeDuration:
+    """Test cases for the has_minimum_time_duration helper."""
+
+    def test_returns_true_for_exact_7_5_hour_range(self):
+        """Exact 7.5-hour duration should pass."""
+        assert has_minimum_time_duration('09:00 AM  04:30 PM') is True
+
+    def test_returns_true_when_spacing_differs(self):
+        """Spacing differences should not impact parsing."""
+        assert has_minimum_time_duration('09:00 AM 04:30 PM') is True
+
+    def test_returns_true_for_typical_mid_job(self):
+        """Typical middle-school job duration should pass."""
+        assert has_minimum_time_duration('08:00 AM  03:30 PM') is True
+
+    def test_returns_true_for_alternate_mid_job(self):
+        """Typical middle-school job duration should pass."""
+        assert has_minimum_time_duration('08:20 AM  03:50 PM') is True
+
+    def test_returns_false_for_short_duration(self):
+        """Ranges shorter than 7.5 hours should fail."""
+        assert has_minimum_time_duration('09:00 AM  03:30 PM') is False
+
+    def test_returns_false_for_invalid_format(self):
+        """Invalid text should fail safely."""
+        assert has_minimum_time_duration('not-a-time-range') is False
+
+    def test_returns_false_for_empty_range(self):
+        """Empty strings should fail."""
+        assert has_minimum_time_duration('') is False
+
+    def test_handles_overnight_ranges(self):
+        """Overnight ranges should be treated as next-day end times."""
+        assert has_minimum_time_duration('10:00 PM  06:00 AM') is True
+
+    def test_respects_custom_minimum_hours(self):
+        """Custom minimum duration should be honored."""
+        assert has_minimum_time_duration('09:00 AM  04:00 PM', minimum_hours=7.0) is True
+        assert has_minimum_time_duration('09:00 AM  04:00 PM', minimum_hours=8.0) is False
 
 
 class TestIntegration:

@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import keyring
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 load_dotenv()
 
@@ -59,20 +59,18 @@ START_DATE_INPUT_SELECTOR = "#start-date-filter-input"
 END_DATE_INPUT_SELECTOR = "#end-date-filter-input"
 APPLY_FILTER_BUTTON_SELECTOR = "#apply-filter"
 
-# Define ranking groups
+# Define ranking groups and constants
 high_locations = {"JOHN CHAMPE HIGH", "FREEDOM HIGH", "LIGHTRIDGE HIGH", "BRIAR WOODS HIGH", "INDEPENDENCE HIGH",
                     "PARK VIEW HIGH", "RIVERSIDE HIGH"}
-mid_locations = {"WILLARD", "GUM SPRING", "LUNSFORD"}
+mid_locations = {"WILLARD MIDDLE", "GUM SPRING MIDDLE", "LUNSFORD MIDDLE"}
 high_classifications = {"HS ART", "HS HISTORY", "HS GOVERNMENT", "HS ENGLISH", "HS MATH", "HS SCIENCE", "HS DRAMA", 
                         "HS INSTRUMENTAL MUSIC", "HS CHORAL MUSIC", "HS MARKETING", "HS BUSINESS", "HS GERMAN",
                         "HS LIBRARY ASSISTANT", "HS LIBRARIAN/MEDIA SPECIALIST", "HS FAMILY & CONSUMER SCIENCE",
                         "HS TECHNOLOGY ED", "HS WORLD HISTORY AND GLOBAL STUDIES"}
 mid_classifications = {"MS CHORAL MUSIC", "MS MATH", "MS LIBRARIAN", "MS LIBRARY ASSISTANT", "MS GERMAN",
                        "MS ENGLISH", "MS WORLD HISTORY AND GLOBAL STUDIES"}
-high_time_range = "09:00 AM  04:30 PM"
-mid_time_range = "08:00 AM  03:30 PM"
-mid_date_range = 7 # number of days for the mid-level date range filter
-
+HOURS_IN_SCHOOL_DAY = 7.5
+MID_DATE_RANGE = 7 # number of days for the mid-level date range filter
 
 def parse_job_date(job_date_str):
     """Parse a job date string from supported SmartFind formats."""
@@ -82,6 +80,39 @@ def parse_job_date(job_date_str):
         except ValueError:
             continue
     return None
+
+
+def has_minimum_time_duration(
+    time_range: str,
+    minimum_hours: float = HOURS_IN_SCHOOL_DAY,
+) -> bool:
+    """Return True if a SmartFind time range is at least minimum_hours long.
+
+    Args:
+        time_range: A time range string like "09:00 AM  04:30 PM".
+        minimum_hours: Minimum allowed duration in hours.
+
+    Returns:
+        bool: True when parsed duration is >= minimum_hours, else False.
+    """
+    time_parts = time_range.split()
+    if len(time_parts) < 4:
+        return False
+
+    start_text = f"{time_parts[0]} {time_parts[1]}"
+    end_text = f"{time_parts[2]} {time_parts[3]}"
+
+    try:
+        start_time = datetime.strptime(start_text, "%I:%M %p")
+        end_time = datetime.strptime(end_text, "%I:%M %p")
+    except ValueError:
+        return False
+
+    if end_time < start_time:
+        end_time += timedelta(days=1)
+
+    duration_hours = (end_time - start_time).total_seconds() / 3600
+    return duration_hours >= minimum_hours
 
 def read_dates_from_command_line():
     """
@@ -443,11 +474,13 @@ def login_to_website(page, logger):
 # Job Acceptance Criteria Functions
 # ============================================================================
 
-def should_accept_job(job):
+def should_accept_job(job, current_date: date | None = None):
     """Check if a job meets all high criteria (location, classification, and time range).
     
     Args:
         job: List of cell texts representing a job
+        current_date: Date used for middle-school date window checks.
+            Defaults to today's date when not provided.
         
     Returns:
         bool: True if job should be accepted automatically, False otherwise
@@ -458,26 +491,37 @@ def should_accept_job(job):
     location = job[4]
     classification = job[3]
     time_range = job[1] if len(job) > 1 else ""
-    
-    # Check if all three criteria are met
+
+    # Determine whether the job time range is at least HOURS_IN_SCHOOL_DAY
+    # hours long.
+    has_time_duration = has_minimum_time_duration(
+        time_range,
+        minimum_hours=HOURS_IN_SCHOOL_DAY,
+    )
+
+    # Check if all criteria are met
     has_high_location = any(loc in location for loc in high_locations)
     has_high_classification = any(cls in classification for cls in high_classifications)
-    has_high_time = high_time_range in time_range
     has_mid_location = any(loc in location for loc in mid_locations)
     has_mid_classification = any(cls in classification for cls in mid_classifications)
-    has_mid_time = mid_time_range in time_range
     # Compare date values (not full datetimes) so jobs dated "today" are included.
-    today = datetime.today().date()
-    mid_date_limit = today + timedelta(days=mid_date_range)
+    effective_today = current_date if current_date is not None else datetime.today().date()
+    mid_date_limit = effective_today + timedelta(days=MID_DATE_RANGE)
     job_date_str = job[0] if len(job) > 0 else ""
     job_date = parse_job_date(job_date_str)
     job_date_value = job_date.date() if job_date is not None else None
     is_within_mid_date_range = (
-        job_date_value is not None and today <= job_date_value <= mid_date_limit
+        job_date_value is not None
+        and effective_today <= job_date_value <= mid_date_limit
     )
 
-    return (has_high_location and has_high_classification and has_high_time) or \
-        (has_mid_location and has_mid_classification and has_mid_time and is_within_mid_date_range)
+    return (has_high_location and has_high_classification and has_time_duration) or \
+        (
+            has_mid_location
+            and has_mid_classification
+            and has_time_duration
+            and is_within_mid_date_range
+        )
 
 # ============================================================================
 # Date Filter Management Functions
